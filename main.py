@@ -164,28 +164,41 @@ class ImageFilterApp:
 
         num_colors = int(self.num_colors_slider.get())
         labels, colors = extract_key_colors(self.image, num_colors)
+
+        # Sort colors by brightness (darkest to lightest)
         colors, sorted_indices = sort_colors_by_brightness(colors)
         self.log_console(f"Sorted Colors: {colors.tolist()}")
 
         masks = create_masks_from_colors(labels, colors, sorted_indices)
+
+        # Initialize a cumulative mask with the same shape as individual masks
         cumulative_mask = np.zeros_like(masks[0], dtype=np.uint8)
 
         self.progress['maximum'] = len(colors) + 1
         self.progress['value'] = 0
 
+        total_layers = len(colors)  # Get the total number of layers
+
         for idx, (mask, color) in enumerate(zip(masks, colors)):
             hex_color = rgb_to_hex(color)
-            layer_number = idx + 1
 
-            # Fill mask to stack layers properly
+            # Assign layer numbers in reverse order
+            layer_number = total_layers - idx
+
+            # Fill in any pixels from previous layers if they overlap in the current mask
+            mask = np.maximum(mask, cumulative_mask)
+
+            # Update the cumulative mask to include the current layer
             cumulative_mask = np.maximum(cumulative_mask, mask)
+
+            # Save PNG and STL using the updated cumulative mask
             save_png_from_mask(cumulative_mask, color, hex_color, layer_number, self.save_dir)
             save_stl_from_mask(cumulative_mask, layer_number, self.save_dir)
 
             self.progress['value'] += 1
             self.root.update_idletasks()
 
-        self.log_console("Conversion Completed!")
+        self.log_console("Conversion Completed with Reversed Layer Order!")
         self.progress['value'] = len(colors) + 1
 
     def display_image(self, image):
